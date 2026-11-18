@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VELAMAR HEAT — Open World Crime</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0c10; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #fff; }
+  #game-container, #game-container canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+  .panel { background: rgba(8, 10, 14, 0.72); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; backdrop-filter: blur(3px); }
+
+  #objective-wrap { position: absolute; top: 14px; left: 14px; max-width: 430px; padding: 10px 14px; }
+  #objective { font-size: 15px; font-weight: 600; line-height: 1.35; }
+  #timer { font-size: 26px; font-weight: 800; color: #ffd23f; margin-top: 4px; }
+  #money-row { display: flex; gap: 14px; align-items: center; margin-top: 6px; font-size: 14px; }
+  #money { font-weight: 800; color: #7dff9a; font-size: 17px; }
+  #trust-wrap { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb; }
+  #trust-bar { width: 90px; height: 7px; background: #333; border-radius: 4px; overflow: hidden; }
+  #trust-fill { display: block; height: 100%; width: 50%; background: #2a9d8f; }
+
+  #status-wrap { position: absolute; top: 14px; right: 14px; padding: 10px 14px; text-align: right; }
+  #stars { font-size: 26px; letter-spacing: 3px; line-height: 1; }
+  .bar { width: 170px; height: 9px; background: #333; border-radius: 5px; overflow: hidden; margin-top: 6px; margin-left: auto; }
+  .bar > div { height: 100%; }
+  #health-fill { background: #e74c3c; width: 100%; }
+  #car-health-fill { background: #f39c12; width: 100%; }
+  .bar-label { font-size: 10px; color: #aaa; margin-top: 3px; }
+
+  #minimap { position: absolute; left: 14px; bottom: 14px; width: 200px; height: 200px; border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 8px; background: #101418; }
+
+  #speed-wrap { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+  #radio { font-size: 13px; color: #ffd23f; font-weight: 600; text-shadow: 0 1px 3px #000; }
+  #speed { font-size: 30px; font-weight: 800; text-shadow: 0 2px 4px #000; }
+
+  #prompt { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); font-size: 16px; font-weight: 700; background: rgba(8, 10, 14, 0.75); padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255, 210, 63, 0.5); }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { left: 0; top: 8px; width: 18px; height: 2px; }
+
+  #toast { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); text-align: center; padding: 10px 22px; }
+  #toast-title { font-size: 19px; font-weight: 800; }
+  #toast-sub { font-size: 13px; color: #ddd; margin-top: 2px; }
+
+  #mission-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: 22px 34px; max-width: 520px; }
+  #mission-title { font-size: 30px; font-weight: 900; color: #ffd23f; letter-spacing: 1px; }
+  #mission-brief { font-size: 15px; color: #eee; margin-top: 8px; line-height: 1.45; }
+
+  #heist-bar { position: absolute; left: 50%; bottom: 170px; transform: translateX(-50%); width: 320px; }
+  #heist-bar .bar { width: 100%; margin: 0; height: 12px; }
+  #heist-fill { background: #ffd23f; width: 0%; }
+  #heist-label { text-align: center; font-size: 12px; margin-top: 4px; color: #ffd23f; font-weight: 700; }
+
+  #busted-meter { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); width: 300px; text-align: center; }
+  #busted-meter .bar { width: 100%; height: 12px; }
+  #busted-fill { background: #ff2222; width: 0%; }
+  #busted-label { font-size: 15px; font-weight: 800; color: #ff5555; margin-top: 4px; }
+
+  #damage { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 0, 0, 0.55) 100%); opacity: 0; transition: opacity 0.35s; }
+  body.title-mode #objective-wrap, body.title-mode #status-wrap, body.title-mode #minimap, body.title-mode #speed-wrap, body.title-mode #prompt, body.title-mode #crosshair, body.title-mode #toast, body.title-mode #mission-card, body.title-mode #heist-bar, body.title-mode #busted-meter { display: none !important; }
+
+  .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(5, 8, 14, 0.55) 0%, rgba(5, 8, 14, 0.82) 100%); z-index: 10; }
+  .overlay-inner { text-align: center; max-width: 640px; padding: 30px; }
+  .game-title { font-size: 64px; font-weight: 900; letter-spacing: 4px; color: #ffd23f; text-shadow: 0 4px 0 #b3541e, 0 8px 24px rgba(0, 0, 0, 0.7); }
+  .game-sub { font-size: 17px; letter-spacing: 6px; color: #fff; margin-top: 2px; }
+  .story { font-size: 15px; line-height: 1.6; color: #e8e8e8; margin: 18px auto; max-width: 560px; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; text-align: left; font-size: 13.5px; color: #ccc; max-width: 520px; margin: 0 auto 20px; }
+  .controls b { color: #ffd23f; }
+  .btn { display: inline-block; font-size: 17px; font-weight: 800; padding: 12px 30px; margin: 4px; border: none; border-radius: 9px; cursor: pointer; background: #ffd23f; color: #111; }
+  .btn:hover { background: #ffe27a; }
+  .btn.ghost { background: rgba(255, 255, 255, 0.14); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
+  .btn.ghost:hover { background: rgba(255, 255, 255, 0.25); }
+  .save-note { font-size: 12px; color: #999; margin-top: 12px; }
+
+  .big-word { font-size: 58px; font-weight: 900; letter-spacing: 4px; color: #ff4444; text-shadow: 0 4px 18px rgba(0, 0, 0, 0.8); }
+  .overlay p { font-size: 15px; color: #ddd; margin: 12px 0 20px; line-height: 1.5; }
+  .choice-card { display: inline-block; width: 180px; vertical-align: top; margin: 6px; padding: 16px 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 210, 63, 0.45); border-radius: 10px; cursor: pointer; }
+  .choice-card:hover { background: rgba(255, 210, 63, 0.18); }
+  .choice-card b { display: block; font-size: 16px; color: #ffd23f; margin-bottom: 6px; }
+  .choice-card span { font-size: 12.5px; color: #ddd; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+
+<div id="objective-wrap" class="panel">
+  <div id="objective">Welcome to Velamar.</div>
+  <div id="timer" class="hidden"></div>
+  <div id="money-row">
+    <span id="money">$0</span>
+    <span id="trust-wrap">TRUST <span id="trust-bar"><span id="trust-fill"></span></span></span>
+  </div>
+</div>
+
+<div id="status-wrap" class="panel">
+  <div id="stars">☆☆☆☆☆</div>
+  <div id="health-wrap"><div class="bar"><div id="health-fill"></div></div><div class="bar-label">HEALTH</div></div>
+  <div id="car-health-wrap" class="hidden"><div class="bar"><div id="car-health-fill"></div></div><div class="bar-label">CAR</div></div>
+</div>
+
+<canvas id="minimap" width="200" height="200"></canvas>
+
+<div id="speed-wrap">
+  <div id="radio" class="hidden"></div>
+  <div id="speed"></div>
+</div>
+
+<div id="prompt" class="hidden"></div>
+<div id="crosshair" class="hidden"></div>
+
+<div id="toast" class="panel hidden">
+  <div id="toast-title"></div>
+  <div id="toast-sub"></div>
+</div>
+
+<div id="mission-card" class="panel hidden">
+  <div id="mission-title"></div>
+  <div id="mission-brief"></div>
+</div>
+
+<div id="heist-bar" class="hidden">
+  <div class="bar"><div id="heist-fill"></div></div>
+  <div id="heist-label">ROBBING…</div>
+</div>
+
+<div id="busted-meter" class="hidden">
+  <div class="bar"><div id="busted-fill"></div></div>
+  <div id="busted-label">THE VPD IS ON YOU — RUN!</div>
+</div>
+
+<div id="damage"></div>
+
+<div id="title-screen" class="overlay">
+  <div class="overlay-inner">
+    <div class="game-title">VELAMAR HEAT</div>
+    <div class="game-sub">AN OPEN-WORLD CRIME STORY</div>
+    <div class="story">Sun, salt and stolen cars. Milo Reyes owes the Marín family a fortune, and the
+      only way out is one last score across Velamar — seven missions, two heists, and every
+      cop in the city. Steal cars, lose the heat, and choose how the story ends.</div>
+    <div class="controls">
+      <div><b>W A S D</b> — Move / Drive</div>
+      <div><b>Mouse</b> — Look around</div>
+      <div><b>Shift</b> — Run</div>
+      <div><b>Space</b> — Jump</div>
+      <div><b>E</b> — Get in / out of a car</div>
+      <div><b>Click</b> — Shoot (with pistol)</div>
+      <div><b>F</b> — Punch</div>
+      <div><b>R</b> — Change radio station</div>
+      <div><b>M</b> — Mute</div>
+      <div><b>Esc</b> — Pause / Save</div>
+    </div>
+    <button id="continue-btn" class="btn hidden">CONTINUE</button>
+    <button id="new-btn" class="btn">NEW GAME</button>
+    <div class="save-note">Progress saves automatically after every mission — and from the pause menu.</div>
+  </div>
+</div>
+
+<div id="pause-menu" class="overlay hidden">
+  <div class="overlay-inner">
+    <div class="big-word" style="color:#ffd23f">PAUSED</div>
+    <p>Velamar waits for no one. Well — except right now.</p>
+    <button id="resume-btn" class="btn">RESUME</button>
+    <button id="save-btn" class="btn ghost">SAVE GAME</button>
+    <button id="quit-btn" class="btn ghost">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="ending-choice" class="overlay hidden">
+  <div class="overlay-inner">
+    <div class="big-word" style="color:#ffd23f; font-size:44px">THE VAULT IS YOURS</div>
+    <p>$5,000 in clean Harbor money. One choice left — how does Milo's story end?</p>
+    <button class="choice-card" data-ending="keep"><b>KEEP IT ALL</b><span>Buy the Marina. Live like a king. Ana never calls again.</span></button>
+    <button class="choice-card" data-ending="debt"><b>PAY THE DEBT</b><span>Settle with the Marín family and walk away clean.</span></button>
+    <button class="choice-card" data-ending="split"><b>SPLIT WITH ANA</b><span>Fifty-fifty. Two outlaws, one city, a bigger job next.</span></button>
+  </div>
+</div>
+
+<div id="ending-screen" class="overlay hidden">
+  <div class="overlay-inner">
+    <div id="ending-title" class="big-word" style="color:#ffd23f; font-size:40px"></div>
+    <p id="ending-text"></p>
+    <p id="ending-stats" style="color:#ffd23f; font-weight:700"></p>
+    <button id="ending-continue" class="btn">FREE ROAM — SIDE JOBS AWAIT</button>
+  </div>
+</div>
+
+<div id="busted-screen" class="overlay hidden">
+  <div class="overlay-inner">
+    <div class="big-word">BUSTED</div>
+    <p>The VPD caught up with you. They took $200 and your ride — but Velamar is still out there.</p>
+    <button id="retry-btn" class="btn">BACK ON THE STREET</button>
+  </div>
+</div>
+
+<div id="wasted-screen" class="overlay hidden">
+  <div class="overlay-inner">
+    <div class="big-word">WASTED</div>
+    <p>Milo went down hard. The hospital patched him up and kept $150 for the trouble.</p>
+    <button id="retry-btn2" class="btn">BACK ON THE STREET</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
