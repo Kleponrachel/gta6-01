@@ -62,6 +62,7 @@ export function createPlayer(world) {
     money: 0,
     trust: 50,
     weapon: false,
+    hasSmg: false,
     ammo: 0,
     car: null,
     walkPhase: 0,

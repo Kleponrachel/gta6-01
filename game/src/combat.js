@@ -8,6 +8,7 @@ export class Combat {
     this.raycaster = new THREE.Raycaster();
     this.tracer = null;
     this.tracerTimer = 0;
+    this.cooldown = 0;
     this.flash = new THREE.PointLight(0xffcc66, 0, 30);
     world.scene.add(this.flash);
     // Pistol pickup glowing on the sidewalk near the spawn.
@@ -22,17 +23,35 @@ export class Combat {
     g.position.set(p.x, 0.5, p.z);
     world.scene.add(g);
     this.pickup = { group: g, taken: false };
+    // SMG crate by the Docks: faster fire, lighter hits, shared ammo pool.
+    const s = world.landmarks.smg;
+    const sg = new THREE.Group();
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.6), new THREE.MeshLambertMaterial({ color: 0x2e5e2e }));
+    const sglow = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.6),
+      new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.35 }),
+    );
+    sg.add(crate, sglow);
+    sg.position.set(s.x, 0.5, s.z);
+    world.scene.add(sg);
+    this.smgPickup = { group: sg, taken: false };
   }
 
   shoot() {
     const world = this.world;
     const player = world.player;
     if (!player.weapon) return;
+    if (this.cooldown > 0) return;
     if (player.ammo <= 0) {
       world.audio.click();
       world.hud.toast('Out of ammo', 'Finish a mission to restock');
       return;
     }
+    // SMG: rapid fire, 12 damage a hit. Pistol (or any truthy non-SMG
+    // weapon, e.g. the legacy `true`): slower, 25 damage a hit.
+    const isSmg = player.weapon === 'smg';
+    this.cooldown = isSmg ? 0.09 : 0.28;
+    const damage = isSmg ? 12 : 25;
     player.ammo -= 1;
     world.audio.shot();
     const from = world.camera.position.clone();
@@ -59,7 +78,7 @@ export class Combat {
       } else {
         const car = [...world.traffic.cars, ...world.police.cars].find((c) => c.group === obj);
         if (car) {
-          car.health -= 25;
+          car.health -= damage;
           if (car.health <= 0 && car.driver === 'traffic') {
             car.targetSpeed = 0;
             car.speed = 0;
@@ -107,6 +126,11 @@ export class Combat {
 
   update(dt) {
     const world = this.world;
+    if (this.cooldown > 0) this.cooldown -= dt;
+    // Hold the mouse to keep firing (rate-limited by the cooldown above).
+    if (world.input.mouseDown && !world.player.car && world.player.weapon && world.state === 'playing') {
+      this.shoot();
+    }
     if (this.tracerTimer > 0) {
       this.tracerTimer -= dt;
       if (this.tracerTimer <= 0 && this.tracer) {
@@ -125,6 +149,20 @@ export class Combat {
         player.weapon = true;
         player.ammo = 24;
         world.hud.toast('Pistol picked up', 'Click to shoot • F to punch');
+        world.audio.pickup();
+      }
+    }
+    // SMG pickup (Docks crate).
+    if (!this.smgPickup.taken) {
+      this.smgPickup.group.rotation.y += dt;
+      const player = world.player;
+      if (!player.car && Math.hypot(player.pos.x - this.smgPickup.group.position.x, player.pos.z - this.smgPickup.group.position.z) < 2) {
+        this.smgPickup.taken = true;
+        world.scene.remove(this.smgPickup.group);
+        player.hasSmg = true;
+        player.weapon = 'smg';
+        player.ammo += 30;
+        world.hud.toast('SMG picked up', 'Q — switch Pistol / SMG • rapid fire, lighter hits');
         world.audio.pickup();
       }
     }

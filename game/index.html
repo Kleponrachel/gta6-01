@@ -16,6 +16,9 @@
   #timer { font-size: 26px; font-weight: 800; color: #ffd23f; margin-top: 4px; }
   #money-row { display: flex; gap: 14px; align-items: center; margin-top: 6px; font-size: 14px; }
   #money { font-weight: 800; color: #7dff9a; font-size: 17px; }
+  #district-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 13px; color: #ddd; }
+  #district { font-weight: 800; color: #ffd23f; }
+  #weapon-name { font-weight: 700; color: #fff; }
   #trust-wrap { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb; }
   #trust-bar { width: 90px; height: 7px; background: #333; border-radius: 4px; overflow: hidden; }
   #trust-fill { display: block; height: 100%; width: 50%; background: #2a9d8f; }
@@ -26,6 +29,7 @@
   .bar > div { height: 100%; }
   #health-fill { background: #e74c3c; width: 100%; }
   #car-health-fill { background: #f39c12; width: 100%; }
+  #nos-fill { background: #2ecc71; width: 100%; }
   .bar-label { font-size: 10px; color: #aaa; margin-top: 3px; }
 
   #minimap { position: absolute; left: 14px; bottom: 14px; width: 200px; height: 200px; border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 8px; background: #101418; }
@@ -92,12 +96,14 @@
     <span id="money">$0</span>
     <span id="trust-wrap">TRUST <span id="trust-bar"><span id="trust-fill"></span></span></span>
   </div>
+  <div id="district-row"><span id="district">Downtown</span><span id="weapon-name"></span></div>
 </div>
 
 <div id="status-wrap" class="panel">
   <div id="stars">☆☆☆☆☆</div>
   <div id="health-wrap"><div class="bar"><div id="health-fill"></div></div><div class="bar-label">HEALTH</div></div>
   <div id="car-health-wrap" class="hidden"><div class="bar"><div id="car-health-fill"></div></div><div class="bar-label">CAR</div></div>
+  <div id="nos-wrap" class="hidden"><div class="bar"><div id="nos-fill"></div></div><div class="bar-label">NOS — HOLD SHIFT</div></div>
 </div>
 
 <canvas id="minimap" width="200" height="200"></canvas>
@@ -137,15 +143,17 @@
     <div class="game-title">VELAMAR HEAT</div>
     <div class="game-sub">AN OPEN-WORLD CRIME STORY</div>
     <div class="story">Sun, salt and stolen cars. Milo Reyes owes the Marín family a fortune, and the
-      only way out is one last score across Velamar — seven missions, two heists, and every
+      only way out is one last score across Velamar — ten missions, two heists, and every
       cop in the city. Steal cars, lose the heat, and choose how the story ends.</div>
     <div class="controls">
       <div><b>W A S D</b> — Move / Drive</div>
       <div><b>Mouse</b> — Look around</div>
-      <div><b>Shift</b> — Run</div>
+      <div><b>Shift</b> — Run / NOS boost in car</div>
       <div><b>Space</b> — Jump</div>
       <div><b>E</b> — Get in / out of a car</div>
-      <div><b>Click</b> — Shoot (with pistol)</div>
+      <div><b>Click</b> — Shoot (hold for SMG)</div>
+      <div><b>Q</b> — Switch Pistol / SMG</div>
+      <div><b>1 / 2 / 3</b> — Garage upgrades at Auto Shop</div>
       <div><b>F</b> — Punch</div>
       <div><b>R</b> — Change radio station</div>
       <div><b>M</b> — Mute</div>

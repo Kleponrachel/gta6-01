@@ -1,6 +1,7 @@
-// The Velamar Score: seven story missions, two heists, three endings, and
+// The Velamar Score: ten story missions, two heists, three endings, and
 // side jobs for free roam. Missions are data; the manager just runs them.
 import * as THREE from 'three';
+import { ROAD_LINES } from './city.js';
 
 const STORY = [
   {
@@ -34,6 +35,38 @@ const STORY = [
     brief: 'The pickup was hot — the VPD is on you. Lose the wanted level.',
     type: 'escape',
     reward: 200,
+  },
+  {
+    id: 'informant',
+    title: 'The Informant',
+    brief: 'A snitch at the Club knows the vault layout. Drive there, get out and grab the intel (E).',
+    type: 'pickup',
+    target: 'club',
+    radius: 3,
+    reward: 250,
+  },
+  {
+    id: 'race',
+    title: 'Street Heat',
+    brief: 'Prove the car is fast enough for the harbor job — hit all 3 checkpoints in 75 seconds.',
+    type: 'race',
+    checkpoints: [
+      { x: 40, z: 200 },
+      { x: 200, z: 40 },
+      { x: 120, z: -200 },
+    ],
+    timeLimit: 75,
+    reward: 400,
+  },
+  {
+    id: 'collection',
+    title: 'The Collection',
+    brief: 'A bag of Marín cash is waiting at the Docks. Grab it on foot, then run it to the Safehouse — the VPD will be watching.',
+    type: 'collect',
+    target: 'docks',
+    deliver: 'safehouse',
+    radius: 3,
+    reward: 600,
   },
   {
     id: 'store',
@@ -102,6 +135,10 @@ export class MissionManager {
     return STORY[this.index];
   }
 
+  get totalMissions() {
+    return STORY.length;
+  }
+
   targetPos(key) {
     const lm = this.world.landmarks[key];
     return new THREE.Vector3(lm.x, 0, lm.z);
@@ -121,14 +158,24 @@ export class MissionManager {
     }
     const m = STORY[i];
     this.timer = m.timeLimit || 0;
+    this.raceCheckpoint = 0;
+    this.collectPhase = 'grab';
     world.hud.showMissionCard(m.title, m.brief);
     world.hud.setObjective(`${m.title} — ${m.brief}`);
-    if (m.target) {
+    if (m.type === 'race' && m.checkpoints) {
+      const c = m.checkpoints[0];
+      this.beacon.position.set(c.x, 0, c.z);
+      this.beacon.visible = true;
+    } else if (m.target) {
       const p = this.targetPos(m.target);
       this.beacon.position.set(p.x, 0, p.z);
       this.beacon.visible = true;
     } else {
       this.beacon.visible = false;
+    }
+    // The pickup was hot: the heat mission only works if there is heat.
+    if (m.id === 'heat') {
+      world.police.addHeat(2, 'The VPD spotted the pickup!');
     }
     // Ana's tip: high trust at the final heist means fewer units and no traps.
     if (m.id === 'harbor') {
@@ -177,11 +224,13 @@ export class MissionManager {
     world.hud.showEnding(e.title, e.text, world.player);
     this.storyDone = true;
     this.startSideJob();
+    world.saveGame();
   }
 
   startSideJob() {
     const world = this.world;
     const rng = world.rng;
+    const lm = world.landmarks;
     if (rng.chance(0.5)) {
       // Taxi: pick up a local at a sidewalk nearby, drop them across town.
       const line = rng.pick(ROAD_LINES);
@@ -191,7 +240,6 @@ export class MissionManager {
       this.sideJob = { kind: 'taxi', title: 'Taxi Fare', target: pickup, dest, reward: 150, phase: 'pickup' };
       world.hud.setObjective('Taxi Fare — pick up the passenger at the marker, then drive them to the destination.');
     } else {
-      const lm = world.landmarks;
       const dest = rng.pick([lm.marina, lm.docks, lm.safehouse, lm.harbor, lm.autoshop]);
       this.sideJob = { kind: 'courier', title: 'Courier Run', target: dest, reward: 200, phase: 'deliver' };
       this.sideJobTimer = 60;
@@ -243,6 +291,46 @@ export class MissionManager {
     }
     if (m.type === 'escape') {
       if (world.police.wanted === 0) this.completeMission();
+      return;
+    }
+    if (m.type === 'race') {
+      this.timer -= dt;
+      world.hud.setTimer(this.timer);
+      const cp = m.checkpoints[this.raceCheckpoint];
+      const d = Math.hypot(player.pos.x - cp.x, player.pos.z - cp.z);
+      if (d < 10) {
+        this.raceCheckpoint += 1;
+        if (this.raceCheckpoint >= m.checkpoints.length) {
+          world.hud.setTimer(0);
+          this.completeMission();
+          return;
+        }
+        const next = m.checkpoints[this.raceCheckpoint];
+        this.beacon.position.set(next.x, 0, next.z);
+        world.hud.toast(`Checkpoint ${this.raceCheckpoint + 1}/3`, 'Keep it floored');
+        world.audio.pickup();
+      } else if (this.timer <= 0) {
+        this.timer = m.timeLimit;
+        this.raceCheckpoint = 0;
+        const first = m.checkpoints[0];
+        this.beacon.position.set(first.x, 0, first.z);
+        world.hud.toast('Out of time!', 'The street race restarts — try it faster');
+      }
+      return;
+    }
+    if (m.type === 'collect') {
+      if (this.collectPhase === 'grab') {
+        if (!player.car && dist(m.target) < m.radius && world.input.interact) {
+          this.collectPhase = 'deliver';
+          world.police.addHeat(2, 'The Collection was watched!');
+          const d = this.targetPos(m.deliver);
+          this.beacon.position.set(d.x, 0, d.z);
+          world.hud.setObjective(`${m.title} — bag grabbed! Get it to the Safehouse.`);
+          world.audio.pickup();
+        }
+      } else if (dist(m.deliver) < 8) {
+        this.completeMission();
+      }
       return;
     }
     if (m.type === 'heist') {

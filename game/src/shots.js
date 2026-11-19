@@ -37,7 +37,7 @@ export function stageShot(world, name) {
     car.speed = 26;
     world.enterCar(car);
     world.missions.startMission(3);
-    world.police.addHeat(4, '');
+    world.police.addHeat(2, '');
     // Three cruisers in pursuit, staggered behind on the same road.
     const spots = [
       { x: 34, z: 152 },

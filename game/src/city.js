@@ -2,11 +2,11 @@
 // built from one ground texture, instanced buildings, palms and lamps, and a
 // sun that follows the time of day. Everything here is deterministic per seed.
 import * as THREE from 'three';
-import { PITCH, ROAD_LINES, CITY_HALF, GROUND_HALF, BLOCK_CENTERS, LANDMARKS } from './constants.js';
+import { PITCH, ROAD_LINES, CITY_HALF, GROUND_HALF, BLOCK_CENTERS, LANDMARKS, districtAt } from './constants.js';
 import { makeRng, parkIndices } from './rng.js';
 import { makeGroundTexture, makeFacadeTexture, makeCloudTexture, makeOceanTexture } from './textures.js';
 
-export { PITCH, ROAD_LINES, CITY_HALF, GROUND_HALF, BLOCK_CENTERS, LANDMARKS };
+export { PITCH, ROAD_LINES, CITY_HALF, GROUND_HALF, BLOCK_CENTERS, LANDMARKS, districtAt };
 
 const SKY_STOPS = [
   { tod: 6, sky: 0xffd9a0, sun: 0xffb36b, fog: 0xe8c49a, sunI: 1.6, hemiI: 0.5 },

@@ -13,6 +13,7 @@ export function saveGame(world) {
       storyDone: world.missions ? world.missions.storyDone : false,
       health: player.health,
       weapon: player.weapon,
+      hasSmg: player.hasSmg,
       ammo: player.ammo,
       pos: { x: player.pos.x, z: player.pos.z },
       tod: world.tod,

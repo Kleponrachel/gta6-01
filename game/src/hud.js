@@ -1,6 +1,6 @@
 // The HUD: wanted stars, money, health, TRUST, the minimap, prompts and
 // every overlay from the title screen to the three endings.
-import { ROAD_LINES } from './city.js';
+import { ROAD_LINES, districtAt } from './city.js';
 
 export class HUD {
   constructor(world) {
@@ -10,6 +10,10 @@ export class HUD {
       objective: $('objective'),
       timer: $('timer'),
       money: $('money'),
+      district: $('district'),
+      weaponName: $('weapon-name'),
+      nosWrap: $('nos-wrap'),
+      nosFill: $('nos-fill'),
       trustFill: $('trust-fill'),
       stars: $('stars'),
       healthFill: $('health-fill'),
@@ -135,9 +139,10 @@ export class HUD {
   }
 
   showEnding(title, text, player) {
+    const total = this.world.missions ? this.world.missions.totalMissions : 10;
     this.el.endingTitle.textContent = title;
     this.el.endingText.textContent = text;
-    this.el.endingStats.textContent = `Money: $${player.money}  •  Trust: ${player.trust}  •  Missions: 7/7`;
+    this.el.endingStats.textContent = `Money: $${player.money}  •  Trust: ${player.trust}  •  Missions: ${total}/${total}`;
     this.el.endingScreen.classList.remove('hidden');
   }
 
@@ -207,6 +212,10 @@ export class HUD {
     for (const car of world.traffic.cars) dot(car.pos.x, car.pos.z, '#f1c40f', 2.5);
     const flash = Math.floor(world.elapsed * 2.5) % 2 === 0;
     for (const car of world.police.cars) dot(car.pos.x, car.pos.z, flash ? '#ff2222' : '#2266ff', 3.5);
+    // Police helicopter, when it is up.
+    if (world.police.heli && world.police.heli.active) {
+      dot(world.police.heli.pos.x, world.police.heli.pos.z, flash ? '#ff2222' : '#ffffff', 5);
+    }
     // Player arrow.
     const p = world.player.pos;
     const heading = world.player.car ? world.player.car.heading : world.player.heading;
@@ -239,6 +248,12 @@ export class HUD {
       if (this.cardTimer <= 0) this.el.missionCard.classList.add('hidden');
     }
     this.el.money.textContent = `$${player.money}`;
+    if (this.el.district) this.el.district.textContent = districtAt(player.pos.x, player.pos.z);
+    if (this.el.weaponName) {
+      this.el.weaponName.textContent = player.weapon
+        ? (player.weapon === 'smg' ? `SMG • ${player.ammo}` : `Pistol • ${player.ammo}`)
+        : '';
+    }
     this.el.trustFill.style.width = `${player.trust}%`;
     let stars = '';
     for (let i = 0; i < 5; i++) stars += i < world.police.wanted ? '★' : '☆';
@@ -247,13 +262,23 @@ export class HUD {
     this.el.healthFill.style.width = `${Math.max(0, player.health)}%`;
     if (player.car) {
       this.el.carHealthWrap.classList.remove('hidden');
-      this.el.carHealthFill.style.width = `${Math.max(0, player.car.health)}%`;
+      const maxH = player.car.maxHealth || 100;
+      this.el.carHealthFill.style.width = `${Math.max(0, (player.car.health / maxH) * 100)}%`;
+      if (this.el.nosWrap) {
+        if (player.car.upgrades && player.car.upgrades.nos) {
+          this.el.nosWrap.classList.remove('hidden');
+          this.el.nosFill.style.width = `${Math.max(0, (player.car.nosCharge / (player.car.nosMax || 1)) * 100)}%`;
+        } else {
+          this.el.nosWrap.classList.add('hidden');
+        }
+      }
       const kmh = Math.round(Math.abs(player.car.speed) * 3.2);
       this.el.speed.textContent = `${kmh} km/h`;
       this.el.radio.textContent = world.audio.radioStation;
       this.el.radio.classList.remove('hidden');
     } else {
       this.el.carHealthWrap.classList.add('hidden');
+      if (this.el.nosWrap) this.el.nosWrap.classList.add('hidden');
       this.el.speed.textContent = '';
       this.el.radio.classList.add('hidden');
     }
@@ -267,14 +292,26 @@ export class HUD {
         else if (world.missions && world.missions.current && world.missions.current.type === 'pickup') {
           const t = world.missions.targetPos(world.missions.current.target);
           if (Math.hypot(player.pos.x - t.x, player.pos.z - t.z) < 4) prompt = 'E — Grab the package';
+        } else if (world.missions && world.missions.current && world.missions.current.type === 'collect' && world.missions.collectPhase === 'grab') {
+          const t = world.missions.targetPos(world.missions.current.target);
+          if (Math.hypot(player.pos.x - t.x, player.pos.z - t.z) < 4) prompt = 'E — Grab the bag';
         } else if (world.missions && world.missions.current && (world.missions.current.type === 'heist' || world.missions.current.type === 'heistDeliver')) {
           const t = world.missions.targetPos(world.missions.current.target);
           if (Math.hypot(player.pos.x - t.x, player.pos.z - t.z) < 4.5) prompt = 'Hold E — Rob it';
         }
       } else {
-        if (player.car.tiresBurst || player.car.health < 60) {
-          const a = world.landmarks.autoshop;
-          if (Math.hypot(player.car.pos.x - a.x, player.car.pos.z - a.z) < 10) prompt = 'E — Repair $50';
+        const a = world.landmarks.autoshop;
+        const nearShop = Math.hypot(player.car.pos.x - a.x, player.car.pos.z - a.z) < 10;
+        if (nearShop) {
+          const up = player.car.upgrades || { engine: 0, armor: 0, nos: false };
+          const eng = up.engine >= 2 ? 'Engine MAX' : `1 Engine $${300} (${up.engine}/2)`;
+          const arm = up.armor >= 2 ? 'Armor MAX' : `2 Armor $${250} (${up.armor}/2)`;
+          const nos = up.nos ? `3 NOS refill $150` : `3 NOS $400`;
+          const rep = player.car.tiresBurst || player.car.health < (player.car.maxHealth || 100)
+            ? ' • E Repair $50' : '';
+          prompt = `GARAGE — ${eng} · ${arm} · ${nos}${rep}`;
+        } else if (player.car.tiresBurst || player.car.health < 60) {
+          prompt = 'Find the Auto Shop (green marker) to repair';
         } else {
           prompt = 'E — Get out  •  R — Radio  •  M — Mute';
         }

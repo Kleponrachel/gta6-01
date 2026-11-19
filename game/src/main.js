@@ -40,7 +40,7 @@ const world = {
   tod: params.tod,
   elapsed: 0,
   state: 'title',
-  input: { keys: {}, interact: false },
+  input: { keys: {}, interact: false, mouseDown: false },
   cameraYaw: Math.PI,
   cameraPitch: 0.32,
   cameraDist: 8,
@@ -165,6 +165,7 @@ world.startGame = (fromSave) => {
       player.trust = data.trust;
       player.health = data.health;
       player.weapon = data.weapon;
+      player.hasSmg = !!data.hasSmg || data.weapon === 'smg';
       player.ammo = data.ammo;
       player.pos.set(data.pos.x, 0, data.pos.z);
       world.tod = data.tod || 17.2;
@@ -181,6 +182,7 @@ world.startGame = (fromSave) => {
     player.trust = 50;
     player.health = 100;
     player.weapon = false;
+    player.hasSmg = false;
     player.ammo = 0;
     player.pos.set(world.landmarks.spawn.x, 0, world.landmarks.spawn.z);
     world.tod = 17.2;
@@ -204,6 +206,7 @@ world.respawnAfterBust = () => {
   world.police.wanted = 0;
   for (const c of world.police.cars) world.scene.remove(c.group);
   world.police.cars.length = 0;
+  world.police.heli.clear();
   world.setState('playing');
   world.hud.toast('Back on the street', 'The VPD let you go — this time');
 };
@@ -223,10 +226,10 @@ window.addEventListener('keydown', (e) => {
     if (player.car) {
       const a = world.landmarks.autoshop;
       const nearShop = Math.hypot(player.car.pos.x - a.x, player.car.pos.z - a.z) < 10;
-      if (nearShop && (player.car.tiresBurst || player.car.health < 100) && player.money >= 50) {
+      if (nearShop && (player.car.tiresBurst || player.car.health < (player.car.maxHealth || 100)) && player.money >= 50) {
         player.money -= 50;
         player.car.tiresBurst = false;
-        player.car.health = 100;
+        player.car.health = player.car.maxHealth || 100;
         world.hud.toast('Car repaired', 'Fresh tires, full tank — $50');
         world.audio.pickup();
         return;
@@ -236,6 +239,50 @@ window.addEventListener('keydown', (e) => {
       const car = world.nearestCar(4);
       if (car) world.enterCar(car);
     }
+  } else if ((key === '1' || key === '2' || key === '3') && world.state === 'playing' && world.player.car) {
+    // Garage upgrades at the Auto Shop (in the car, near the shop).
+    const player = world.player;
+    const car = player.car;
+    const a = world.landmarks.autoshop;
+    if (Math.hypot(car.pos.x - a.x, car.pos.z - a.z) >= 10) return;
+    if (!car.upgrades) car.upgrades = { engine: 0, armor: 0, nos: false };
+    const buy = (price, ok, apply, label) => {
+      if (!ok) {
+        world.hud.toast('Already maxed out', label);
+        return;
+      }
+      if (player.money < price) {
+        world.hud.toast('Not enough cash', `${label} costs $${price}`);
+        return;
+      }
+      player.money -= price;
+      apply();
+      world.hud.toast(`${label} installed`, `-$${price}`);
+      world.audio.pickup();
+    };
+    if (key === '1') {
+      buy(300, car.upgrades.engine < 2, () => { car.upgrades.engine += 1; }, `Engine Lv ${car.upgrades.engine + 1}`);
+    } else if (key === '2') {
+      buy(250, car.upgrades.armor < 2, () => {
+        car.upgrades.armor += 1;
+        car.maxHealth = 100 + car.upgrades.armor * 50;
+        car.health = Math.min(car.maxHealth, car.health + 50);
+      }, `Armor Lv ${car.upgrades.armor + 1}`);
+    } else if (key === '3') {
+      if (car.upgrades.nos) {
+        buy(150, car.nosCharge < 100, () => { car.nosCharge = 100; }, 'NOS refilled');
+      } else {
+        buy(400, true, () => { car.upgrades.nos = true; car.nosMax = 100; car.nosCharge = 100; }, 'NOS installed');
+      }
+    }
+  } else if (key === 'q' && world.state === 'playing' && !world.player.car && world.player.hasSmg) {
+    // Switch between the pistol and the SMG on foot.
+    const player = world.player;
+    player.weapon = player.weapon === 'smg' ? true : 'smg';
+    world.hud.toast(player.weapon === 'smg' ? 'SMG equipped' : 'Pistol equipped', player.weapon === 'smg' ? 'Rapid fire — Q to switch back' : 'Heavy hits — Q to switch to SMG');
+    world.audio.click();
+  } else if (key === 'f' && world.state === 'playing' && !world.player.car) {
+    world.combat.punch();
   } else if (key === 'r' && world.player.car) {
     world.audio.cycleRadio();
   } else if (key === 'm') {
@@ -253,6 +300,7 @@ window.addEventListener('keyup', (e) => {
 let dragging = false;
 renderer.domElement.addEventListener('mousedown', (e) => {
   world.audio.ensure();
+  world.input.mouseDown = true;
   if (world.state !== 'playing') return;
   if (document.pointerLockElement !== renderer.domElement) {
     renderer.domElement.requestPointerLock();
@@ -264,6 +312,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mouseup', () => {
   dragging = false;
+  world.input.mouseDown = false;
 });
 window.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === renderer.domElement || dragging) {
@@ -371,8 +420,12 @@ function animate() {
 
   if (world.state === 'playing') {
     const player = world.player;
-    if (player.car) drivePlayerCar(world, player.car, dt);
-    else updatePlayerOnFoot(world, dt);
+    if (player.car) {
+      drivePlayerCar(world, player.car, dt);
+      // The player's position IS the car while driving: missions, police,
+      // the heli and the HUD all read player.pos.
+      player.pos.set(player.car.pos.x, 0, player.car.pos.z);
+    } else updatePlayerOnFoot(world, dt);
     world.traffic.update(dt);
     world.peds.update(dt);
     world.police.update(dt);

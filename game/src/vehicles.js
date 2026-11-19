@@ -78,6 +78,11 @@ export function makeCar(world, x, z, heading, color, isPolice, driver) {
     isPolice,
     driver,
     health: 100,
+    maxHealth: 100,
+    // Garage upgrades (per car — lost when you steal a new ride).
+    upgrades: { engine: 0, armor: 0, nos: false },
+    nosCharge: 0,
+    nosMax: 0,
     tiresBurst: false,
     dirIndex: 0,
     turnCooldown: 0,
@@ -90,7 +95,14 @@ export function makeCar(world, x, z, heading, color, isPolice, driver) {
 // Arcade driving for the car the player sits in.
 export function drivePlayerCar(world, car, dt) {
   const input = world.input;
-  const maxSpeed = (car.tiresBurst ? 22 : 40) * (car.health <= 0 ? 0 : 1);
+  const engineBonus = (car.upgrades ? car.upgrades.engine : 0) * 8;
+  let maxSpeed = (car.tiresBurst ? 22 : 40 + engineBonus) * (car.health <= 0 ? 0 : 1);
+  // NOS: hold Shift while driving to burn the charge for a burst of speed.
+  const nosOn = !!(input.keys['shift'] && car.upgrades && car.upgrades.nos && car.nosCharge > 0 && car.speed > 5);
+  if (nosOn) {
+    maxSpeed += 18;
+    car.nosCharge = Math.max(0, car.nosCharge - 30 * dt);
+  }
   let accel = 0;
   if (input.keys['w'] || input.keys['arrowup']) accel = 16;
   if (input.keys['s'] || input.keys['arrowdown']) accel = car.speed > 0.5 ? -30 : -10;

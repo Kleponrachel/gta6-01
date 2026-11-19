@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { ROAD_LINES } from './city.js';
 import { makeCar } from './vehicles.js';
+import { HeliManager } from './heli.js';
 
 export class PoliceManager {
   constructor(world) {
@@ -18,6 +19,7 @@ export class PoliceManager {
     this.roadblocks = [];
     this.flashTimer = 0;
     this.flashOn = false;
+    this.heli = new HeliManager(world);
   }
 
   addHeat(n, reason) {
@@ -99,6 +101,7 @@ export class PoliceManager {
     const world = this.world;
     const player = world.player;
     this.timeSinceCrime += dt;
+    this.heli.update(dt);
     this.flashTimer -= dt;
     if (this.flashTimer <= 0) {
       this.flashTimer = 0.35;
@@ -191,7 +194,9 @@ export class PoliceManager {
       else c.stuckTimer = 0;
       const reversing = c.stuckTimer > 1.5;
       const top = 24 + this.wanted * 3;
-      const targetSpeed = reversing ? -10 : Math.min(top, dist * 0.9 + 8);
+      // A cruiser that reaches an on-foot player stops and makes the bust
+      // instead of circling at speed forever (which only ever ran them over).
+      const targetSpeed = reversing ? -10 : (!player.car && dist < 5 ? 0 : Math.min(top, dist * 0.9 + 8));
       c.speed += (targetSpeed - c.speed) * Math.min(1, dt * 1.8);
       c.heading += Math.max(-1, Math.min(1, dh * 2.2)) * dt * (reversing ? -1 : 1) * Math.min(1, Math.abs(c.speed) / 8 + 0.3);
       c.pos.x += Math.sin(c.heading) * c.speed * dt;

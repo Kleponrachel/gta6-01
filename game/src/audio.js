@@ -10,6 +10,8 @@ export class AudioEngine {
     this.sirenOsc = null;
     this.sirenGain = null;
     this.sirenPhase = 0;
+    this.rotorOsc = null;
+    this.rotorGain = null;
     this.radioStation = 'VELA 101';
     this.stationIndex = 0;
     this.nextNoteTime = 0;
@@ -50,6 +52,19 @@ export class AudioEngine {
       this.sirenOsc.connect(this.sirenGain);
       this.sirenGain.connect(this.master);
       this.sirenOsc.start();
+      // Heli rotor: a low chopping thump, silent until a heli is overhead.
+      this.rotorOsc = this.ctx.createOscillator();
+      this.rotorOsc.type = 'sawtooth';
+      this.rotorOsc.frequency.value = 82;
+      const rotorFilter = this.ctx.createBiquadFilter();
+      rotorFilter.type = 'lowpass';
+      rotorFilter.frequency.value = 220;
+      this.rotorGain = this.ctx.createGain();
+      this.rotorGain.gain.value = 0;
+      this.rotorOsc.connect(rotorFilter);
+      rotorFilter.connect(this.rotorGain);
+      this.rotorGain.connect(this.master);
+      this.rotorOsc.start();
       // Shared noise buffer for shots and thuds.
       const len = this.ctx.sampleRate * 0.2;
       this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -79,6 +94,12 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     const near = Math.max(0, 1 - dist / 160);
     this.sirenGain.gain.setTargetAtTime(near * 0.05, t, 0.2);
+  }
+
+  setRotor(on) {
+    if (!this.ctx || !this.rotorGain) return;
+    const t = this.ctx.currentTime;
+    this.rotorGain.gain.setTargetAtTime(on ? 0.035 : 0, t, 0.3);
   }
 
   blip(freq, dur, type, vol, when) {
